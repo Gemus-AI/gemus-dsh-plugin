@@ -1,0 +1,29 @@
+{
+  "name": "gemus-dsh-plugin",
+  "version": "0.1.0",
+  "description": "Drive the Gemus AI design canvas from DeepSeek Harness — plan workflows, run generations, and pull assets back as native dsh tools.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "mcp",
+    "gemus",
+    "design",
+    "canvas",
+    "image-generation"
+  ],
+  "homepage": "https://gemus.ai/connect",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gemus-AI/gemus-dsh-plugin.git"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

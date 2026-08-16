@@ -1,0 +1,24 @@
+# Gemus bundle layer for DeepSeek Harness (dsh) — Issue #2820.
+#
+# Mounts one `@deepseek-ai/dsh-mcp-client` instance pointed at the hosted Gemus MCP endpoint, so the
+# harness registers the Gemus canvas tools as `mcp__gemus__<tool>`. Config only: no plugin code, no
+# dependency on the preview-era Cordis plugin API.
+#
+# `!!js` is interpolated ONLY inside a row's `config` — Loader entry metadata (`id` / `name` /
+# `disabled`) is consumed verbatim, so an expression there silently evaluates to a truthy object
+# (dsh post-mortem 0002). Every expression below is under `config`.
+- insert:
+    - id: gemus
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: gemus
+        transport: streamable-http
+        # Same env contract as the Gemus Codex companion: GEMUS_URL is the full MCP endpoint.
+        url: !!js "process.env.GEMUS_URL ?? 'https://gemus.ai/api/mcp'"
+        headers:
+          Authorization: !!js '`Bearer ${process.env.GEMUS_KEY}`'
+        # dsh defaults to 60s per callTool; a Gemus generation blocks until the job finishes, which
+        # for video routinely exceeds that. 10 min covers every interactive case while staying far
+        # below the 45-min server-side execution ceiling, so a timeout here means "stop waiting",
+        # never "the job died" — re-read the canvas instead of re-running (re-running spends credits).
+        toolCallTimeoutMs: 600000
