@@ -50,8 +50,12 @@ In a session, the model should see `mcp__gemus__*`. A good first prompt:
 
 > Use node_list to show me which Gemus generation nodes exist.
 
-If no `mcp__gemus__` tool appears, the connection failed: the client logs the error and activates with
-no tools (it does not abort the harness). The usual cause is an unset or expired `GEMUS_KEY`.
+Discovery is asynchronous, so the very first turn after a fresh install can start before the tools are
+registered — ask again rather than concluding it is broken.
+
+If `mcp__gemus__` tools still do not appear, the connection failed: the client logs the error and
+activates with no tools (it does not abort the harness). The usual cause is an unset or expired
+`GEMUS_KEY`.
 
 ## What the agent gets
 
