@@ -16,6 +16,20 @@ developer-preview Cordis plugin API.
 ## Install
 
 ```sh
+npx -y @gemus/mcp-proxy@0.1.15 setup-dsh
+```
+
+It asks for your key (masked, never echoed), saves it — the Windows user environment, or a managed
+block in your shell startup file on macOS / Linux — installs this bundle, and then starts `dsh` with
+the key already in its environment. Rerunning it is safe: the managed block is replaced, not stacked.
+
+Add `--url "https://your-gemus.example/api/mcp"` for a self-hosted or development Gemus.
+
+### Manual install
+
+For shells the installer does not write (fish and friends), or when startup files are off limits:
+
+```sh
 dsh plugin --profile web add github:Gemus-AI/gemus-dsh-plugin
 ```
 
@@ -23,7 +37,9 @@ The bundle has no lifecycle scripts, so pnpm needs no `allowBuilds` grant. Pin a
 (`github:Gemus-AI/gemus-dsh-plugin#<sha>`) if you want the layer frozen.
 
 Then export your key **before starting `dsh`** — the row reads it from the environment, so the key
-never lands in a config file:
+never lands in a config file. Note that environment variables only reach *new* processes: starting
+`dsh` in the very terminal where you set the key can leave it unset, which looks exactly like the
+model having no Gemus tools.
 
 ```sh
 # macOS / Linux
@@ -87,6 +103,10 @@ activates with no tools (it does not abort the harness). The usual cause is an u
 ```sh
 dsh plugin --profile web remove gemus-dsh-plugin
 ```
+
+If you used the one-command installer, also drop the saved key: delete the
+`# >>> gemus >>>` … `# <<< gemus <<<` block from your shell startup file (macOS / Linux), or clear
+`GEMUS_KEY` from your Windows user environment.
 
 ---
 
