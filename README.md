@@ -9,14 +9,15 @@ developer-preview Cordis plugin API.
 
 ## Requirements
 
-- DeepSeek Harness (`dsh`) installed.
+- DeepSeek Harness installed globally: `npm i -g @deepseek-ai/dsh`. Running it through `npx`
+  leaves `dsh` off your PATH, and the installer below needs to find it there.
 - A Gemus account and an MCP key (`mak_…`): [gemus.ai](https://gemus.ai) → Settings → MCP Keys.
   Generations spend Gemus credits from that account.
 
 ## Install
 
 ```sh
-npx -y @gemus/mcp-proxy@0.1.15 setup-dsh
+npx -y @gemus/mcp-proxy@0.1.16 setup-dsh
 ```
 
 It asks for your key (masked, never echoed), saves it — the Windows user environment, or a managed
@@ -89,9 +90,21 @@ activates with no tools (it does not abort the harness). The usual cause is an u
 
 ## Known limits
 
-- **Images are not visible to the model.** dsh renders image, audio, and resource blocks as
-  placeholders, so `view_image` cannot be used for visual judgement here. Use `open_canvas` to hand
-  the result to a browser instead.
+- **`view_image` depends on your model route, not on dsh.** dsh admits MCP image blocks only after
+  the active model positively declares image input. The default route (`deepseek-official` /
+  `deepseek-v4-flash`) declares text only, so every image degrades to
+  `[image unavailable: …; model "…" does not declare image input; …]` — the model is told it cannot
+  see, rather than shown a blank. Route the agent to a model that declares image input and
+  `view_image` works as it does on any other host; the attachment store it needs is already mounted
+  in this profile.
+- **Prefer letting the canvas do the looking.** Independent of the model route, `execute` an
+  `analyzer` node with the image wired to its `reference` port and read back the structured text
+  report. If that node's model already accepts images (Gemini, Claude, Kimi, GPT, Grok) it sees them
+  directly; otherwise the platform routes that run to its own vision provider. Either way the visual
+  judgement is made by a vision model on the canvas, not by the agent's model, and it costs no image
+  tokens in this session.
+- **Audio and embedded resources are never visible.** dsh has no admission path for those blocks;
+  they are always replaced by a placeholder. Use `open_canvas` to hand the result to a browser.
 - **Generations are billed and slow.** A call blocks until the job finishes. `toolCallTimeoutMs` is
   raised to 600000 (10 min) by this bundle; the server-side ceiling is 45 min. If a call does time
   out, the job usually still completes — re-read the canvas with `canvas_read` rather than
