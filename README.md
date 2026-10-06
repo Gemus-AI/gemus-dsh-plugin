@@ -65,7 +65,7 @@ dsh --profile web --dump-config   # shows a "# == gemus-dsh-plugin" layer
 
 In a session, the model should see `mcp__gemus__*`. A good first prompt:
 
-> Use node_list to show me which Gemus generation nodes exist.
+> Use read with target contract to show me which Gemus generation nodes exist.
 
 Discovery is asynchronous, so the very first turn after a fresh install can start before the tools are
 registered — ask again rather than concluding it is broken.
@@ -78,15 +78,15 @@ activates with no tools (it does not abort the harness). The usual cause is an u
 
 | Tool | Purpose |
 | --- | --- |
-| `project_plan`, `blueprint` | Plan a workflow; creates the canvas when none is given |
-| `canvas_edit`, `canvas_read` | Transactional graph edits; authoritative canvas reads |
-| `node_list` | Node and model catalog discovery |
-| `execute`, `batch_execute` | Run one node, or many in parallel |
-| `read_asset`, `view_image` | Fetch produced assets |
-| `workflow_list`, `open_canvas` | List workflows; open one in the browser via a one-time deep link |
-| `search_community`, `study_community_work`, `import_community_workflow` | Learn from published work |
-| `add_references`, `extract_document_figures`, `place_document_figures` | Reference and document material |
-| `ppt_edit`, `publish_workflow`, `recall_history` | Deck editing, publishing, session history |
+| `edit` | Plan operations, multi-node graphs, focused edits and capability-backed imports |
+| `read` | Canvas, node/model contract, assets, figures, history and PPT read targets |
+| `execute` | Run one or several nodes, then deliver content, renew leases or report client failures |
+| `view_image` | View produced images as pixels |
+| `workflow_list`, `open_canvas` | Resolve and open an existing workflow |
+| `search`, `fetch` | Discover and read community work |
+| `ppt_edit`, `publish_workflow` | Deck authoring and confirmed publishing |
+
+Writes require an explicit idempotencyKey. Use the same key only for an identical retry. Read item status and resource identities; execute.wait reports current progress. ask_user_question is available only in Bridge mode.
 
 ## Known limits
 
@@ -107,7 +107,7 @@ activates with no tools (it does not abort the harness). The usual cause is an u
   they are always replaced by a placeholder. Use `open_canvas` to hand the result to a browser.
 - **Generations are billed and slow.** A call blocks until the job finishes. `toolCallTimeoutMs` is
   raised to 600000 (10 min) by this bundle; the server-side ceiling is 45 min. If a call does time
-  out, the job usually still completes — re-read the canvas with `canvas_read` rather than
+  out, the job usually still completes — re-read the canvas with `read` rather than
   re-running, which would spend credits twice.
 - **One key, one account.** All work runs as the owner of the `mak_` key.
 
@@ -125,3 +125,6 @@ If you used the one-command installer, also drop the saved key: delete the
 
 Generated from the Gemus monorepo (`.dsh-plugin/`, `scripts/pack-dsh-plugin.mjs`) — edit upstream,
 not here. Third-party names are used for interoperability only.
+
+Codex-generated images without a corresponding node remain on the local machine and do not land on the canvas.
+New workflows use `workflow_create({workspaceTarget:"personal"|"active",name,idempotencyKey})`; retain the returned `workflowId`, then use `edit`.
