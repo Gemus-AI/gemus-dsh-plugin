@@ -1,78 +1,52 @@
-# Gemus — DeepSeek Harness bundle
+# Gemus — DeepSeek Harness desktop plugin
 
-Drive the [Gemus](https://gemus.ai) AI design canvas from DeepSeek Harness: plan a node workflow, run
-image / video / 3D / PPT generations on it, and read the produced assets back — as native `dsh` tools.
+Connect the [Gemus](https://gemus.ai) design canvas from the official DeepSeek Harness app.
+This bundle includes a Host connection owner and an in-app configuration page. It uses DSH's official MCP client; tools keep their `mcp__gemus__*` names.
 
-This bundle is **configuration only**. It ships one `@deepseek-ai/dsh-mcp-client` row pointed at the
-hosted Gemus MCP endpoint; there is no plugin code, no build step, and no dependency on the
-developer-preview Cordis plugin API.
+## Desktop setup (recommended)
 
-## Requirements
+Requires the official DSH Desktop **0.2.1-rc.5** and a Gemus account.
+[Download the official app](https://github.com/deepseek-ai/deepseek-harness/releases).
+The app includes its runtime; no system Node.js, global CLI, or terminal is required.
 
-- DeepSeek Harness installed globally: `npm i -g @deepseek-ai/dsh`. Running it through `npx`
-  leaves `dsh` off your PATH, and the installer below needs to find it there.
-- A Gemus account and an MCP key (`mak_…`): [gemus.ai](https://gemus.ai) → Settings → MCP Keys.
-  Generations spend Gemus credits from that account.
+1. In DSH, open **Plugins → Add plugin** and enter `github:Gemus-AI/gemus-dsh-plugin`.
+2. Install and enable Gemus, then open its page in the installed plugins list.
+3. Create a Key at [Gemus Connect](https://gemus.ai/connect). Paste it into **Gemus Key**, select **Connect Gemus**, and confirm the displayed account and personal space.
+4. In a normal DSH chat, ask: “Use Gemus workflow_list to list workflows in my personal space. Do not create workflows or generate content.”
 
-## Install
+A successful check confirms identity and observed tool registration at the shown time, not continuous online status. A normal chat call verifies actual use. Connection checks spend no Gemus generation credits; DSH chat may consume model credits. Model credentials and working-directory selection belong to DSH and remain separate.
+
+The connection is saved by DSH's credentials service and restored after reopening. This local storage is not an encrypted keychain and does not protect secrets from other processes running as the same OS user.
+
+## Recovery and upgrade
+
+Use **Check again** after a network failure or exhausted automatic retries. It rebuilds one official MCP instance and checks again. Use **Change Key** for the wrong account or a revoked Key. **Disconnect** clears this plugin's stored Key and prevents legacy environment fallback; it does not revoke a Gemus Key or alter other clients.
+
+From 0.1.3, use the native Plugins page to uninstall and reinstall, then enter your Key again. Keep your models, chats, and other plugins. Unknown user YAML overrides are not automatically removed; a conflicting Gemus MCP row must be resolved through the host's existing management UI. No build scripts or allowBuilds grant are needed.
+
+Windows and macOS require separate end-to-end verification. Other DSH releases are outside this version's declared compatibility.
+
+## Advanced CLI setup
+
+The existing installer requires Node.js and a `dsh` command on PATH:
 
 ```sh
 npx -y @gemus/mcp-proxy@0.1.16 setup-dsh
 ```
 
-It asks for your key (masked, never echoed), saves it — the Windows user environment, or a managed
-block in your shell startup file on macOS / Linux — installs this bundle, and then starts `dsh` with
-the key already in its environment. Rerunning it is safe: the managed block is replaced, not stacked.
-
-Add `--url "https://your-gemus.example/api/mcp"` for a self-hosted or development Gemus.
-
-### Manual install
-
-For shells the installer does not write (fish and friends), or when startup files are off limits:
+It configures the **web** CLI profile, not Desktop. Alternatively:
 
 ```sh
 dsh plugin --profile web add github:Gemus-AI/gemus-dsh-plugin
-```
-
-The bundle has no lifecycle scripts, so pnpm needs no `allowBuilds` grant. Pin a commit
-(`github:Gemus-AI/gemus-dsh-plugin#<sha>`) if you want the layer frozen.
-
-Then export your key **before starting `dsh`** — the row reads it from the environment, so the key
-never lands in a config file. Note that environment variables only reach *new* processes: starting
-`dsh` in the very terminal where you set the key can leave it unset, which looks exactly like the
-model having no Gemus tools.
-
-```sh
-# macOS / Linux
 export GEMUS_KEY="mak_…"
+dsh --profile web
 ```
 
-```powershell
-# Windows PowerShell
-$env:GEMUS_KEY = "mak_…"
-```
+In PowerShell use `$env:GEMUS_KEY = "mak_…"` before launching `dsh --profile web` in that same terminal. Child processes inherit the current shell environment. Updating the Windows user environment or a shell startup file requires a new terminal.
 
-Self-hosted or development Gemus: also set `GEMUS_URL` to the full MCP endpoint
-(`https://your-gemus.example/api/mcp`). Unset, it defaults to `https://gemus.ai/api/mcp`.
+Legacy `GEMUS_KEY` / `GEMUS_URL` are read together only when no desktop credential record exists. `GEMUS_URL` is the full MCP URL; the default is `https://gemus.ai/api/mcp`. Advanced self-hosted endpoints allow HTTPS, or HTTP on loopback only, without URL credentials/query/fragment.
 
-## Verify
-
-Start `dsh` and confirm the tools registered:
-
-```sh
-dsh --profile web --dump-config   # shows a "# == gemus-dsh-plugin" layer
-```
-
-In a session, the model should see `mcp__gemus__*`. A good first prompt:
-
-> Use read with target contract to show me which Gemus generation nodes exist.
-
-Discovery is asynchronous, so the very first turn after a fresh install can start before the tools are
-registered — ask again rather than concluding it is broken.
-
-If `mcp__gemus__` tools still do not appear, the connection failed: the client logs the error and
-activates with no tools (it does not abort the harness). The usual cause is an unset or expired
-`GEMUS_KEY`.
+Use `dsh --profile web --dump-config` to inspect the Gemus layer. For reproducibility, pin `github:Gemus-AI/gemus-dsh-plugin#<published-sha>`.
 
 ## What the agent gets
 
@@ -112,6 +86,10 @@ Writes require an explicit idempotencyKey. Use the same key only for an identica
 - **One key, one account.** All work runs as the owner of the `mak_` key.
 
 ## Uninstall
+
+In Desktop, first **Disconnect** on the Gemus plugin page to clear this plugin's stored Key, then use **Uninstall** in Plugins. This does not revoke the Key or change other clients.
+
+For the CLI web profile only:
 
 ```sh
 dsh plugin --profile web remove gemus-dsh-plugin

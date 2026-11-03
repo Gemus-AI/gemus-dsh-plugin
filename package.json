@@ -1,6 +1,20 @@
 {
   "name": "gemus-dsh-plugin",
-  "version": "0.1.3",
+  "version": "0.2.3",
+  "type": "module",
+  "main": "./dist/host.js",
+  "exports": { ".": "./dist/host.js", "./client": "./dist/client.js", "./package.json": "./package.json" },
+  "engines": { "dsh": "0.2.1-rc.5" },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-credentials": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-mcp-client": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-rc.5",
+    "react": "^18.2.0",
+    "zod": "4.4.3"
+  },
   "description": "Drive the Gemus AI design canvas from DeepSeek Harness — plan workflows, run generations, and pull assets back as native dsh tools.",
   "keywords": [
     "dsh",
@@ -18,10 +32,16 @@
     "url": "git+https://github.com/Gemus-AI/gemus-dsh-plugin.git"
   },
   "files": [
+    "dist/host.js",
+    "dist/client.js",
     "cordis.patch.yml",
     "README.md"
   ],
   "dsh": {
+    "client": {
+      "inject": ["@deepseek-ai/dsh-api-remotes", "@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-plugin-manager"],
+      "platform": "web"
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
