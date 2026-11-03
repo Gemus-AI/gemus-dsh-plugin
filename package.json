@@ -1,10 +1,16 @@
 {
   "name": "gemus-dsh-plugin",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "type": "module",
   "main": "./dist/host.js",
-  "exports": { ".": "./dist/host.js", "./client": "./dist/client.js", "./package.json": "./package.json" },
-  "engines": { "dsh": "0.2.1-rc.5" },
+  "exports": {
+    ".": "./dist/host.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "dsh": "0.2.1-rc.5"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.5",
     "@deepseek-ai/dsh-credentials": "0.2.1-rc.5",
@@ -13,7 +19,10 @@
     "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.5",
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-rc.5",
     "react": "^18.2.0",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@deepseek-ai/dsh-skill": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-session-projection": "0.2.1-rc.5"
   },
   "description": "Drive the Gemus AI design canvas from DeepSeek Harness — plan workflows, run generations, and pull assets back as native dsh tools.",
   "keywords": [
@@ -39,7 +48,11 @@
   ],
   "dsh": {
     "client": {
-      "inject": ["@deepseek-ai/dsh-api-remotes", "@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-plugin-manager"],
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ],
       "platform": "web"
     },
     "bundle": {

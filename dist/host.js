@@ -10,7 +10,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 var __decoratorStart = (base) => [, , , __create(base?.[__knownSymbol("metadata")] ?? null)];
 var __decoratorStrings = ["class", "method", "getter", "setter", "accessor", "field", "value", "get", "set"];
 var __expectFn = (fn) => fn !== void 0 && typeof fn !== "function" ? __typeError("Function expected") : fn;
-var __decoratorContext = (kind, name, done, metadata, fns) => ({ kind: __decoratorStrings[kind], name, metadata, addInitializer: (fn) => done._ ? __typeError("Already initialized") : fns.push(__expectFn(fn || null)) });
+var __decoratorContext = (kind, name, done, metadata2, fns) => ({ kind: __decoratorStrings[kind], name, metadata: metadata2, addInitializer: (fn) => done._ ? __typeError("Already initialized") : fns.push(__expectFn(fn || null)) });
 var __decoratorMetadata = (array, target) => __defNormalProp(target, __knownSymbol("metadata"), array[3]);
 var __runInitializers = (array, flags, self, value) => {
   for (var i = 0, fns = array[flags >> 1], n = fns && fns.length; i < n; i++) flags & 1 ? fns[i].call(self) : value = fns[i].call(self, value);
@@ -47,14 +47,141 @@ var __privateGet = (obj, member, getter) => (__accessCheck(obj, member, "read fr
 var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
 var __privateMethod = (obj, member, method2) => (__accessCheck(obj, member, "access private method"), method2);
 
+// src/skill.ts
+import { BUNDLED_SKILL_RANK } from "@deepseek-ai/dsh-skill";
+
 // ../../skills/gemus-getting-started/SKILL.md
 var SKILL_default = '---\nname: gemus-getting-started\ndescription: Use when building, editing, running, or opening an AI design workflow on the Gemus canvas through the Gemus MCP connection.\n---\n\n# Working With Gemus\n\nUse the installed MCP tools to operate the user\'s live Gemus canvas. If the host provides `tool_search`, load a missing tool by its exact name. Other hosts expose connected MCP tools directly; use their tool inventory and report a missing connection instead of requiring an unavailable discovery tool.\n\n## Delivery Surface\n\nWhen the requested deliverable is a Gemus workflow, keep planning and implementation on the Gemus MCP surface. MCP mutations are the implementation: use `edit` with `op: "planCreate" / "planUpdate" / "planDecide"` for durable decisions, `op: "graph"` for multi-node phases, and structure operations for focused changes, `execute` for generation, and `publish_workflow` for a confirmed direct publish.\n\nDo not create local implementation plans, specs, apps, or documents as substitutes for those canvas operations. Local filesystem work is limited to reading user-provided files or preparing assets for upload unless the user explicitly asks for a local code or document deliverable.\n\nBrowser control after `open_canvas` is for opening the returned one-time URL and visual inspection only. It does not replace MCP reads, mutations, execution, or publishing.\n\n## Workflow Contract\n\n1. Resolve the connection mode and target before the first mutation. In Bridge mode, the platform session\'s active workflow is authoritative: edit it in place and omit workflowId, or pass that exact ID. The user must open another workflow to change targets. In standalone MCP clients (Codex, DSH, and other harnesses), there is no current-canvas binding. Reuse an explicit workflowId; when the user names an existing workflow, call `workflow_list` with its exact `name`, reuse the ID only when exactly one match is returned, and ask the user to disambiguate zero or multiple matches. If a new canvas is needed, call `workflow_create` with explicit `workspaceTarget` (`personal` or `active`), `name`, and `idempotencyKey`; keep the returned `workflowId` and use `edit` afterward. Edit does not create workflows. Never guess a target.\n2. For a workflow with three or more connected nodes, load `edit` and use `op: "graph"`; use focused structure operations for small changes. Name each new zone for its design purpose. Declare deliverables in the graph or create the plan first; follow returned node and zone IDs.\n3. Call `edit` with one graph per phase. Reuse the same workflowId on later calls. For phase 2+, read actual prior outputs and connect existingNodeId to the new nodes; extend an existing zone with `zone: { id }`.\n4. Give every analyzer, brainstorm, and generated-text node its own dedicated prompt written for that node. Connect research or other generated material to its `reference` port, never its `prompt` port.\n5. Run `execute` as a dry run first and show any platform-credit estimate before requesting confirmation. In Codex, also load `gemus-codex-imagen` for local image generation and canvas backfill. Other hosts use the providers available through `execute`; they do not require the Codex companion skill.\n6. Call `open_canvas` once after obtaining the workflow ID. In Codex, load and follow `browser:control-in-app-browser`, navigating the one-time URL in its selected user-visible browser. Do not use `browser_navigate`, `browser_snapshot`, standalone Playwright MCP, chrome-devtools, or other external/headless browser surfaces in this Codex flow: they can consume the link outside the visible Browser. The Browser skill\'s own runtime is allowed. In DSH and other MCP hosts, use the host\'s available user-visible browser capability. If the host cannot open it, provide `url` and `fallbackEditorUrl` and say that the user must open it; never claim the canvas opened without evidence.\n\nUse `read` with `requests: [{ target: "contract" }]` for node/model discovery and `target: "workspace" / "node"` for current IDs, outputs, ports, and status. Every write requires idempotencyKey (8\u2013128 safe characters): keep it for retries of the same request, use a new key for a changed operation. Read receipts item by item; an accepted execute item is not proof of completion\u2014check its matching wait handle or read the canvas.\n\n### Minimal graph request\n\nReplace the workflow ID with the returned ID. Graph deliverable references are zero-based: `new:0` is the first entry. Use returned node IDs in later calls; discover node/model contracts before filling their config.\n\n```json\n{\n  "workflowId": "workflow-id",\n  "idempotencyKey": "getting-started-graph-01",\n  "requests": [{\n    "op": "graph",\n    "deliverables": [{ "title": "Launch poster", "kind": "image-set" }],\n    "groups": [{\n      "zone": { "name": "Launch poster" },\n      "deliverableIds": ["new:0"],\n      "nodes": [\n        { "bind": "brief", "nodeType": "text-prompt", "config": { "text": "A minimal ceramic studio launch poster" } },\n        { "bind": "poster", "nodeType": "gen-image-generation", "deliverableId": "new:0", "config": { "model": "gemini-2.5-flash-image", "mode": "text-to-image" } }\n      ],\n      "edges": [{ "from": "brief", "fromPort": "text", "to": "poster", "toPort": "prompt" }]\n    }]\n  }]\n}\n```\n\n## Presentation decks\n\nA workflow carries **at most one `gen-ppt` node**. It is the deck\'s identity: its node ID owns the revision, the plan and the slide bindings. Creating a second one abandons that state instead of repairing it.\n\nPick one authoring mode per node and stay in it:\n\n| Mode | When | What runs | What is forbidden |\n| --- | --- | --- | --- |\n| Direct authoring | You are designing and filling the deck (the default when the user asks Codex to make the PPT) | `ppt_edit` init/plan/write/finalize | Never `execute` the `gen-ppt` node \u2014 it overwrites the deck output with model-generated content |\n| Model pipeline | The user explicitly asks for the node\'s own generation model to produce the deck | `execute` on the `gen-ppt` node | Do not also author the same node with `ppt_edit` in the same pass |\n\nModel constraints are scoped to what they name. "Use `gpt-image-2` for all image generation" applies to `gen-image-generation` nodes only; never propagate an image model onto `gen-ppt`, text, or analysis nodes. `edit` returns `completions` when it auto-corrects an incompatible model \u2014 read them and tell the user what changed.\n\nWhen the canvas already holds real design imagery, plan an image-led deck: every page names its visual protagonist and each asset\'s evidence role. Support a technical claim with the technical artefact \u2014 a plan, section, exploded view or detail \u2014 because an aerial or hero render does not stand in for one. Caption each asset with what THAT asset shows, mark annotated assets and give them `contain`, and do not make one image the protagonist of several pages. `read` with `target: "ppt-plan-check"` and the current revision reports all of this deterministically before any slide exists; fix the plan there rather than meeting the same defects as critique findings afterwards.\n\nWhen the user wants Codex to design and fill a presentation directly on the Gemus canvas, use the MCP PPT editor instead of executing the `gen-ppt` node\'s configured generation model:\n\n1. Find the workflow\'s existing `gen-ppt` node with `read` target `workspace` and reuse it. Create one with `edit` op `add` **only when the canvas has none**; when one already exists you may not create a second. Search for `ppt_edit` with `tool_search` if it is not already loaded.\n2. Read the selected `ppt-style` profile to discover its skeleton catalog before outlining or writing slides. Use only a returned `skeletonId`; never guess one. Read the selected style resource, such as `skill://corporate`, for visual guidance.\n3. Every `ppt_edit` write uses `{ idempotencyKey, request: { op, nodeId, ... } }`. Call `ppt_edit` with `request: { op: "init_deck", nodeId, title }` once. Keep the returned revision, starting at `0` for a new deck.\n4. Call `write_slide_html` once per slide and pass the revision returned by the previous write. Omit `slideId` to create a new slide. Pass `slideId` to update an existing slide. Call `get_layout_seed` for the row first and act on its `assetHints` \u2014 natural aspect ratio, image-box aspect ratio, predicted `object-fit:cover` crop, whether the asset is annotated, and the recommended fit. None of that is computable from the canvas or the seed alone.\n5. Read the optional `critique` returned by each persisted `write_slide_html` or `patch_slide`. If `critique.pass` is false and `critique.correctionAllowed` is true, apply exactly one corrective round, routed by `critique.repairClass`: `local-style` \u2192 `patch_slide`; `structural-layout` \u2192 rewrite the slide with `write_slide_html`; `asset-semantic` \u2192 rebind the right evidence (replan first when the plan is what is wrong) and rewrite; `invalid-source` \u2192 swap the unusable asset or drop it to a lesser role. The correction is re-evaluated automatically. If `correctionAllowed` is false, `critique` is absent, or it passes, continue; never poll or retry the evaluator.\n6. For later edits, call `read` with `requests: [{ target: "node", address: "node://<nodeId>" }]` to get `deckSummary`, then `read` target `node` with that address and `slideId` to read the target HTML before patching or rewriting it.\n\nOutline `assets` contains objects with a canvas asset `label` and optional `role` (`hero`, `evidence`, `background`, or `decoration`), never bare strings. For example, with the existing deck node and actual canvas asset label:\n\n```json\n{\n  "workflowId": "workflow-id",\n  "idempotencyKey": "getting-started-outline-01",\n  "request": {\n    "op": "create_outline",\n    "nodeId": "deck-node-id",\n    "rows": [{ "title": "The proposal", "intent": "Introduce the concept", "assets": [{ "label": "Hero render", "role": "hero" }] }]\n  }\n}\n```\n\nFor PPT HTML, use `read` with `slideId` alone: `{ workflowId, requests: [{ target: "node", address: "node://<deckNodeId>", slideId: "<slideId>" }] }`. `includeHtml:true` reads a `gen-webpage` document; it is not a PPT selector and cannot be combined with `slideId` or `sectionId`.\n\n### Recovering the same node\n\nEvery failure below is repaired **on the original nodeId**. Exhaust this table before even considering a new node; a second `gen-ppt` node is not a recovery step.\n\n| Symptom | Recovery |\n| --- | --- |\n| `code: \'PPT_REVISION_CONFLICT\'` | Retry the same call with the returned `currentRevision` |\n| `code: \'PPT_DECK_MALFORMED\'` | `init_deck` with `force: true` on that same node |\n| `init_deck` failed or the node holds model-generated, non-deck output | `read` with `requests: [{ target: "node", address: "node://<nodeId>" }]` for `deckSummary`, then `init_deck` with `force: true` on that same node |\n| Transport/HTTP error with unknown outcome | `read` with `requests: [{ target: "node", address: "node://<nodeId>" }]` to learn the persisted revision, then continue from it |\n\nRoute a failed `critique` by `repairClass` \u2014 what is actually wrong \u2014 not by how cheap the fix looks. The corrective round happens once, so do not spend it on a patch that cannot reach the cause.\n\nDo not call a retired structured slide-rendering action. Direct `ppt_edit` mutations do not use the `execute` dry-run/credit flow; only run the `gen-ppt` node when the user explicitly asks for its model-driven generation pipeline.\n\n## Bridge questions\n\nIn Bridge mode, ask_user_question accepts `{ idempotencyKey, request: { kind: "question", questions: [...] } }`. Ask all independent questions together (1\u20138), with optional context, image options and multiSelect. Answers return in the same call as ordered strings or arrays. Respect decline/cancel. Retrying a finalized key replays the answer; after a disconnection an unfinished question may be asked again. Other connection modes do not expose this tool.\n\n## Domain skills\n\nBefore planning or creating a domain-specific workflow, check whether a matching Gemus Skill exists; if it does and would improve output quality, read it first with `ReadMcpResourceTool({ uri: "skill://..." })`. **Skip it for simple tasks, or when you already have sufficient context.** Reading a skill is an optional quality boost, not a gate \u2014 never block or stall on it.\n\n| Trigger | Skill |\n| --- | --- |\n| video, animation, storyboard, film | `skill://film-production` |\n| interior, room, space | `skill://interior-design` |\n| brand, logo, visual identity | `skill://brand-visual` |\n| product, packaging, industrial | `skill://product-design` |\n\n`ListMcpResourcesTool()` lists everything available, including `knowledge://model-guide` (model selection) and `knowledge://design-principles` (visual consistency across multiple assets).\n\nCodex-generated images without a corresponding node remain on the local machine and do not land on the canvas.\n';
+
+// src/skill.ts
+var frontmatter = /^---\r?\nname: ([^\r\n]+)\r?\ndescription: ([^\r\n]+)\r?\n---\r?\n/;
+var metadata = SKILL_default.match(frontmatter);
+if (!metadata) throw new Error("Gemus canonical skill metadata is missing");
+var candidate = {
+  name: metadata[1],
+  description: metadata[2],
+  provider: "gemus",
+  source: "bundled",
+  invocation: { modelInvocable: true, userInvocable: true },
+  rank: BUNDLED_SKILL_RANK,
+  locator: "gemus-getting-started"
+};
+var provider = {
+  name: candidate.provider,
+  list: async () => [candidate],
+  get: async () => ({ ...candidate, content: SKILL_default.replace(frontmatter, "").trim() })
+};
+function installGemusSkill(ctx) {
+  ctx.skills.registerProvider(() => provider);
+}
+
+// src/recovery.ts
+import { expandAssistantStream } from "@deepseek-ai/dsh-llm";
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
+var POLICY = "gemus/tool-json/v1";
+var MAX_RETRIES = 2;
+var stateSchema = z.object({
+  turn: z.number().int().nonnegative(),
+  step: z.number().int().nonnegative(),
+  provider: z.string(),
+  requestSeq: z.number().int().nullable(),
+  attemptRequestSeq: z.number().int().nullable(),
+  attemptSeq: z.number().int().nullable(),
+  handledSeq: z.number().int().nullable(),
+  names: z.array(z.string()),
+  eligible: z.boolean(),
+  retries: z.number().int().nonnegative(),
+  retryId: z.string().nullable()
+});
+function empty() {
+  return { turn: 0, step: 0, provider: "", requestSeq: null, attemptRequestSeq: null, attemptSeq: null, handledSeq: null, names: [], eligible: false, retries: 0, retryId: null };
+}
+function inspect(stream) {
+  try {
+    const chunks = expandAssistantStream(stream).map((value) => value.chunk);
+    const last = chunks.at(-1);
+    if (last?.type !== "finish" || last.reason.kind !== "error" || last.reason.failure.code !== "MALFORMED_RESPONSE") return { eligible: false, names: [] };
+    const starts = chunks.flatMap((chunk) => chunk.type === "block-start" && chunk.blockType === "tool-call" ? [chunk.index] : []);
+    const tools = chunks.flatMap((chunk) => chunk.type === "block-end" && chunk.block.type === "tool-call" ? [{ index: chunk.index, block: chunk.block }] : []);
+    const names = tools.map((tool) => tool.block.name);
+    let malformed = false;
+    for (const { block } of tools) {
+      try {
+        JSON.parse(block.arguments);
+      } catch {
+        malformed = true;
+      }
+    }
+    return { names, eligible: malformed && tools.length > 0 && starts.length === tools.length && starts.every((start) => tools.some((tool) => tool.index === start)) && names.every((name) => name.startsWith("mcp__gemus__")) };
+  } catch {
+    return { eligible: false, names: [] };
+  }
+}
+var recoveryProjection = {
+  key: "gemusToolJsonRecovery",
+  stateVersion: 1,
+  stateSchema,
+  init: empty,
+  apply(state, event) {
+    if (event.type === "request/header") return { ...state, provider: event.data.header.config.provider, requestSeq: event.seq };
+    if (event.type === "request/context") return { ...state, provider: event.data.provider, requestSeq: event.seq };
+    if (event.type === "step/start") return { ...empty(), turn: event.data.turn, step: event.data.step, provider: state.provider, requestSeq: state.requestSeq };
+    if (event.type === "turn/end") return { ...empty(), provider: state.provider, requestSeq: state.requestSeq };
+    if (event.type === "assistant/attempt") {
+      if (event.data.turn !== state.turn || event.data.step !== state.step || state.attemptSeq !== null && event.seq <= state.attemptSeq) return state;
+      return { ...state, ...inspect(event.data.stream), attemptSeq: event.seq, attemptRequestSeq: state.requestSeq };
+    }
+    if (event.type === "llm/retry" && event.data.policyKey === POLICY && event.data.turn === state.turn && event.data.step === state.step && event.data.provider === state.provider && state.attemptSeq !== null && event.seq > state.attemptSeq && state.handledSeq !== state.attemptSeq && event.data.retry === state.retries + 1 && event.data.retry <= MAX_RETRIES && (state.retryId === null || state.retryId === event.data.retryId)) {
+      return { ...state, handledSeq: state.attemptSeq, retries: state.retries + 1, retryId: event.data.retryId };
+    }
+    return state;
+  }
+};
+function installGemusRecovery(ctx, connectionToken) {
+  ctx.sessionProjections.register(recoveryProjection);
+  let active = true;
+  ctx.effect(() => () => {
+    active = false;
+  });
+  ctx.on("agent/request-error", async (payload, next) => {
+    const { agent, turn, step, provider: provider2, failure, retryPolicy, signal } = payload;
+    if (!active || signal.aborted) return;
+    if (failure.code !== "MALFORMED_RESPONSE" || retryPolicy?.mode === "always" || retryPolicy?.mode === "normal" && (retryPolicy.maxRetries === 0 || retryPolicy.retryableCodes.includes(failure.code))) return next();
+    const token = connectionToken();
+    const before = ctx.sessionProjections.stateOf(agent.session, recoveryProjection.key);
+    if (token === void 0 || !before?.eligible || before.turn !== turn || before.step !== step || before.provider !== provider2 || before.requestSeq === null || before.requestSeq !== before.attemptRequestSeq || before.handledSeq === before.attemptSeq || before.retries >= MAX_RETRIES || !before.names.every((name) => ctx.tools.get(name))) return next();
+    const downstream = await next();
+    if (signal.aborted) return;
+    if (downstream?.kind === "retry") return downstream;
+    if (!active || connectionToken() !== token) return downstream;
+    const current = ctx.sessionProjections.stateOf(agent.session, recoveryProjection.key);
+    if (!current || current.attemptSeq !== before.attemptSeq || current.requestSeq !== before.requestSeq || current.handledSeq === current.attemptSeq || current.retries >= MAX_RETRIES) return downstream;
+    const retryId = current.retryId ?? randomUUID();
+    const retry = current.retries + 1;
+    agent.session.append("llm/retry", {
+      retryId,
+      turn,
+      step,
+      provider: provider2,
+      mode: "normal",
+      policyKey: POLICY,
+      retry,
+      maxRetries: MAX_RETRIES,
+      delayMs: 0,
+      failure
+    });
+    if (!active || signal.aborted || connectionToken() !== token) return;
+    agent.session.append("llm/retry-started", { retryId, turn, step, retry });
+    return { kind: "retry" };
+  });
+}
 
 // src/host.ts
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 
 // src/credentials.ts
-import { randomUUID } from "node:crypto";
+import { randomUUID as randomUUID2 } from "node:crypto";
 import { credentialKey } from "@deepseek-ai/dsh-credentials";
 
 // src/contracts.ts
@@ -130,7 +257,7 @@ function createCredentials(store, environment = process.env) {
         if (decode(current, environment).revision !== expectedRevision) throw new Error("conflict");
         return { kind: "api-key", ...next.enabled ? { key: next.apiKey } : {}, env: {
           GEMUS_ENDPOINT: validateEndpoint(next.endpoint),
-          GEMUS_CONNECTION_REVISION: randomUUID(),
+          GEMUS_CONNECTION_REVISION: randomUUID2(),
           GEMUS_CONNECTION_ENABLED: String(next.enabled)
         } };
       });
@@ -167,6 +294,10 @@ var ConnectionOwner = class {
   getStatus() {
     return structuredClone(this.view);
   }
+  /** A foreground connection change immediately fences an in-flight recovery. */
+  get recoveryToken() {
+    return !this.disposed && this.child && this.view.status === "verified" && this.view.operationId === this.generation ? this.generation : void 0;
+  }
   start() {
     return this.run(async (check) => this.restore(check));
   }
@@ -196,11 +327,11 @@ var ConnectionOwner = class {
       this.expectRevision(current, input.expectedRevision);
       const endpoint = validateEndpoint(input.endpoint);
       if (!/^mak_[A-Za-z0-9_-]+$/.test(input.apiKey.trim())) throw new Error("auth-required");
-      const candidate = { ...current, endpoint, apiKey: input.apiKey.trim(), enabled: true };
-      const identity2 = await this.deps.identify(candidate, this.abort.signal);
+      const candidate2 = { ...current, endpoint, apiKey: input.apiKey.trim(), enabled: true };
+      const identity2 = await this.deps.identify(candidate2, this.abort.signal);
       check();
       const identityCheckedAt = (/* @__PURE__ */ new Date()).toISOString();
-      const saved = await this.write(candidate, input.expectedRevision);
+      const saved = await this.write(candidate2, input.expectedRevision);
       check();
       await this.clearChild();
       check();
@@ -374,22 +505,22 @@ function mountOfficialClient(ctx, config) {
 }
 
 // src/remote.ts
-import { z } from "zod";
+import { z as z2 } from "zod";
 import { createTypertRemoteInfo } from "@deepseek-ai/dsh-typert-protocol/remote-info";
-var identity = z.object({ user: z.object({ id: z.string(), username: z.string().nullable(), displayName: z.string() }), personalWorkspace: z.object({ id: z.string(), name: z.string() }).nullable() });
-var view = z.object({
-  status: z.enum(["disconnected", "checking", "verified", "needs-check", "auth-required", "network-error", "server-incompatible", "host-incompatible", "storage-error"]),
-  revision: z.string(),
-  operationId: z.number(),
-  endpoint: z.string(),
-  source: z.enum(["none", "saved", "environment"]),
-  saved: z.boolean(),
+var identity = z2.object({ user: z2.object({ id: z2.string(), username: z2.string().nullable(), displayName: z2.string() }), personalWorkspace: z2.object({ id: z2.string(), name: z2.string() }).nullable() });
+var view = z2.object({
+  status: z2.enum(["disconnected", "checking", "verified", "needs-check", "auth-required", "network-error", "server-incompatible", "host-incompatible", "storage-error"]),
+  revision: z2.string(),
+  operationId: z2.number(),
+  endpoint: z2.string(),
+  source: z2.enum(["none", "saved", "environment"]),
+  saved: z2.boolean(),
   identity: identity.nullable(),
-  toolCount: z.number(),
-  checkedAt: z.string().nullable(),
-  identityCheckedAt: z.string().nullable(),
-  toolsCheckedAt: z.string().nullable(),
-  error: z.enum(["auth-required", "network-error", "server-incompatible", "storage-error", "conflict", "invalid-endpoint", "host-incompatible", "cancelled"]).nullable()
+  toolCount: z2.number(),
+  checkedAt: z2.string().nullable(),
+  identityCheckedAt: z2.string().nullable(),
+  toolsCheckedAt: z2.string().nullable(),
+  error: z2.enum(["auth-required", "network-error", "server-incompatible", "storage-error", "conflict", "invalid-endpoint", "host-incompatible", "cancelled"]).nullable()
 });
 function codec(schema, name) {
   return { mode: "strict", typeSymbol: `gemus/${name}`, create: () => schema };
@@ -404,10 +535,10 @@ function method(name, schema) {
 }
 var GEMUS_REMOTE = createTypertRemoteInfo({ package: "gemus-dsh-plugin", methods: {
   "gemusConnection/getStatus": method(),
-  "gemusConnection/connect": method("input", z.strictObject({ apiKey: z.string().max(512), endpoint: z.string().max(2048), expectedRevision: z.string().max(128) })),
-  "gemusConnection/recheck": method("expectedRevision", z.string().max(128)),
-  "gemusConnection/disconnect": method("expectedRevision", z.string().max(128))
-} }, z);
+  "gemusConnection/connect": method("input", z2.strictObject({ apiKey: z2.string().max(512), endpoint: z2.string().max(2048), expectedRevision: z2.string().max(128) })),
+  "gemusConnection/recheck": method("expectedRevision", z2.string().max(128)),
+  "gemusConnection/disconnect": method("expectedRevision", z2.string().max(128))
+} }, z2);
 
 // src/host.ts
 var _disconnect_dec, _recheck_dec, _connect_dec, _getStatus_dec, _a, _init;
@@ -418,13 +549,8 @@ var GemusConnection = class extends (_a = TypertRemoteService, _getStatus_dec = 
     __publicField(this, "owner");
     __publicField(this, "initialized");
     this.owner = new ConnectionOwner({ ...createCredentials(ctx.credentials), identify, mount: (config) => mountOfficialClient(ctx, config) });
-    ctx.effect(() => ctx.systemPrompt.context({
-      name: "gemus-getting-started",
-      order: 3101,
-      interpolate: false,
-      required: true,
-      text: () => ctx.tools.get("mcp__gemus__workflow_list") ? SKILL_default.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "").trim() : ""
-    }));
+    ctx.inject(["skills"], installGemusSkill);
+    ctx.inject(["sessionProjections", "tools"], (recoveryCtx) => installGemusRecovery(recoveryCtx, () => this.owner.recoveryToken));
     ctx.effect(() => ctx.typert.remotes.register(GEMUS_REMOTE));
     ctx.on("credentials/record-updated", (key) => {
       if (key === CONNECTION_KEY) this.owner.recordUpdated();
