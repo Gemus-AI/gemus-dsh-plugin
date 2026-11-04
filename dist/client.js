@@ -180,7 +180,7 @@ var ResultValue = class {
 };
 
 // src/remote.ts
-var identity = import_zod.z.object({ user: import_zod.z.object({ id: import_zod.z.string(), username: import_zod.z.string().nullable(), displayName: import_zod.z.string() }), personalWorkspace: import_zod.z.object({ id: import_zod.z.string(), name: import_zod.z.string() }).nullable() });
+var identity = import_zod.z.object({ instance: import_zod.z.enum(["cn", "global"]), endpoint: import_zod.z.string(), user: import_zod.z.object({ id: import_zod.z.string(), username: import_zod.z.string().nullable(), displayName: import_zod.z.string() }), personalWorkspace: import_zod.z.object({ id: import_zod.z.string(), name: import_zod.z.string() }).nullable() });
 var view = import_zod.z.object({
   status: import_zod.z.enum(["disconnected", "checking", "verified", "needs-check", "auth-required", "network-error", "server-incompatible", "host-incompatible", "storage-error"]),
   revision: import_zod.z.string(),
@@ -193,7 +193,7 @@ var view = import_zod.z.object({
   checkedAt: import_zod.z.string().nullable(),
   identityCheckedAt: import_zod.z.string().nullable(),
   toolsCheckedAt: import_zod.z.string().nullable(),
-  error: import_zod.z.enum(["auth-required", "network-error", "server-incompatible", "storage-error", "conflict", "invalid-endpoint", "host-incompatible", "cancelled"]).nullable()
+  error: import_zod.z.enum(["auth-required", "network-error", "server-incompatible", "storage-error", "conflict", "invalid-endpoint", "host-incompatible", "cancelled", "identity-mismatch"]).nullable()
 });
 function codec(schema, name) {
   return { mode: "strict", typeSymbol: `gemus/${name}`, create: () => schema };
@@ -208,7 +208,7 @@ function method(name, schema) {
 }
 var GEMUS_REMOTE = createTypertRemoteInfo({ package: "gemus-dsh-plugin", methods: {
   "gemusConnection/getStatus": method(),
-  "gemusConnection/connect": method("input", import_zod.z.strictObject({ apiKey: import_zod.z.string().max(512), endpoint: import_zod.z.string().max(2048), expectedRevision: import_zod.z.string().max(128) })),
+  "gemusConnection/connect": method("input", import_zod.z.strictObject({ apiKey: import_zod.z.string().max(512), endpoint: import_zod.z.string().max(2048), expectedRevision: import_zod.z.string().max(128), expectedUserId: import_zod.z.string().max(128).optional() })),
   "gemusConnection/recheck": method("expectedRevision", import_zod.z.string().max(128)),
   "gemusConnection/disconnect": method("expectedRevision", import_zod.z.string().max(128))
 } }, import_zod.z);
@@ -219,13 +219,19 @@ var DEFAULT_ENDPOINT = "https://gemus.ai/api/mcp";
 // src/locales/en.ts
 var en = {
   title: "Connect Gemus",
+  site: "Gemus site",
+  "site.cn": "Domestic",
+  "site.global": "International",
+  "site.local": "Local development",
+  connectedSite: "Connected site",
+  expectedUser: "Expected account ID (optional)",
   key: "Gemus Key",
   keyHint: "Create a Gemus Key on the Connect page, then paste it here. It is saved by this DSH installation; your model key is separate.",
   connect: "Connect Gemus",
   replace: "Change Key",
   recheck: "Check again",
   disconnect: "Disconnect",
-  advanced: "Advanced: self-hosted Gemus",
+  advanced: "Advanced: local development endpoint",
   endpoint: "MCP endpoint",
   account: "Gemus account",
   space: "Personal space",
@@ -242,18 +248,19 @@ var en = {
   "status.disconnected": "Not connected",
   "status.checking": "Checking\u2026",
   "status.verified": "Account verified and tools registered",
-  "status.needs-check": "Not verified. The plugin remains enabled for automatic recovery.",
+  "status.needs-check": "Not verified. Check again before using Gemus tools.",
   "status.auth-required": "Key is invalid or revoked. Enter a new Gemus Key.",
   "status.network-error": "Cannot reach Gemus. Check your network and try again.",
   "status.host-incompatible": "Plugin could not activate. Check your DSH version or conflicting Gemus plugins.",
   "status.storage-error": "Could not save the connection. Your previous credential is unchanged.",
+  "error.identity-mismatch": "The Key, site, endpoint or expected account does not match. Check your site selection and account ID.",
   "error.auth-required": "This Key was not accepted. The previous connection has not been replaced.",
   "error.network-error": "Gemus could not be verified. Check your network and endpoint.",
   "error.storage-error": "Saving failed. The connection has not been saved.",
   "error.conflict": "The connection changed elsewhere. Check again to load the current connection.",
   "status.server-incompatible": "This Gemus service does not support account verification yet.",
-  "error.server-incompatible": "Ask the Gemus service administrator to update the service, then check again. Existing registered tools may still work in chat.",
-  "error.invalid-endpoint": "Use HTTPS, or HTTP on localhost. Do not include URL credentials, a query, or a fragment.",
+  "error.server-incompatible": "Ask the Gemus service administrator to update the service, then check again. Tools remain disconnected until account verification succeeds.",
+  "error.invalid-endpoint": "Use the official Gemus HTTPS /api/mcp endpoint, or an explicit localhost development endpoint.",
   "error.host-incompatible": "Check the DSH version and whether another Gemus plugin owns the tools.",
   "error.cancelled": "The operation was superseded. Check again.",
   loading: "Loading Gemus connection\u2026",
@@ -264,13 +271,19 @@ var en = {
 // src/locales/zh.ts
 var zh = {
   title: "\u8FDE\u63A5 Gemus",
+  site: "Gemus \u7AD9\u70B9",
+  "site.cn": "\u56FD\u5185\u7AD9",
+  "site.global": "\u56FD\u9645\u7AD9",
+  "site.local": "\u672C\u673A\u5F00\u53D1",
+  connectedSite: "\u5B9E\u9645\u8FDE\u63A5\u7AD9\u70B9",
+  expectedUser: "\u9884\u671F\u8D26\u6237 ID\uFF08\u53EF\u9009\uFF09",
   key: "Gemus Key",
   keyHint: "\u5728 Gemus \u63A5\u5165\u9875\u521B\u5EFA Key\uFF0C\u518D\u7C98\u8D34\u5230\u8FD9\u91CC\u3002\u7531\u5F53\u524D DSH \u4FDD\u5B58\uFF1B\u6A21\u578B\u51ED\u636E\u9700\u53E6\u884C\u914D\u7F6E\u3002",
   connect: "\u8FDE\u63A5 Gemus",
   replace: "\u66F4\u6362 Key",
   recheck: "\u91CD\u65B0\u68C0\u6D4B",
   disconnect: "\u65AD\u5F00\u8FDE\u63A5",
-  advanced: "\u9AD8\u7EA7\uFF1A\u81EA\u6258\u7BA1 Gemus",
+  advanced: "\u9AD8\u7EA7\uFF1A\u672C\u673A\u5F00\u53D1\u5730\u5740",
   endpoint: "MCP \u670D\u52A1\u5730\u5740",
   account: "Gemus \u8D26\u6237",
   space: "\u4E2A\u4EBA\u7A7A\u95F4",
@@ -287,18 +300,19 @@ var zh = {
   "status.disconnected": "\u672A\u8FDE\u63A5",
   "status.checking": "\u68C0\u6D4B\u4E2D\u2026",
   "status.verified": "\u8D26\u6237\u9A8C\u8BC1\u901A\u8FC7\uFF0C\u5DE5\u5177\u5DF2\u6CE8\u518C",
-  "status.needs-check": "\u5C1A\u672A\u9A8C\u8BC1\u3002\u63D2\u4EF6\u4FDD\u6301\u542F\u7528\uFF0C\u7B49\u5F85\u81EA\u52A8\u6062\u590D\u3002",
+  "status.needs-check": "\u5C1A\u672A\u9A8C\u8BC1\uFF0C\u8BF7\u91CD\u65B0\u68C0\u6D4B\u540E\u518D\u4F7F\u7528 Gemus \u5DE5\u5177\u3002",
   "status.auth-required": "Key \u65E0\u6548\u6216\u5DF2\u64A4\u9500\uFF0C\u8BF7\u8F93\u5165\u65B0\u7684 Gemus Key\u3002",
   "status.network-error": "\u65E0\u6CD5\u8FDE\u63A5 Gemus\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u540E\u91CD\u65B0\u68C0\u6D4B\u3002",
   "status.host-incompatible": "\u63D2\u4EF6\u672A\u80FD\u6FC0\u6D3B\uFF0C\u8BF7\u68C0\u67E5 DSH \u7248\u672C\u6216\u5176\u4ED6 Gemus \u63D2\u4EF6\u51B2\u7A81\u3002",
   "status.storage-error": "\u65E0\u6CD5\u4FDD\u5B58\u8FDE\u63A5\uFF0C\u539F\u51ED\u636E\u4FDD\u6301\u4E0D\u53D8\u3002",
+  "error.identity-mismatch": "Key\u3001\u7AD9\u70B9\u3001\u670D\u52A1\u5730\u5740\u6216\u9884\u671F\u8D26\u6237\u4E0D\u5339\u914D\uFF0C\u8BF7\u68C0\u67E5\u6240\u9009\u7AD9\u70B9\u548C\u8D26\u6237 ID\u3002",
   "error.auth-required": "\u672A\u63A5\u53D7\u8FD9\u4E2A Key\uFF0C\u539F\u8FDE\u63A5\u5C1A\u672A\u88AB\u66FF\u6362\u3002",
   "error.network-error": "\u65E0\u6CD5\u9A8C\u8BC1 Gemus\uFF0C\u8BF7\u68C0\u67E5\u7F51\u7EDC\u548C\u670D\u52A1\u5730\u5740\u3002",
   "error.storage-error": "\u4FDD\u5B58\u5931\u8D25\uFF0C\u8FDE\u63A5\u5C1A\u672A\u4FDD\u5B58\u3002",
   "error.conflict": "\u8FDE\u63A5\u5DF2\u5728\u5176\u4ED6\u4F4D\u7F6E\u66F4\u6539\uFF0C\u8BF7\u91CD\u65B0\u68C0\u6D4B\u4EE5\u52A0\u8F7D\u5F53\u524D\u8FDE\u63A5\u3002",
   "status.server-incompatible": "\u5F53\u524D Gemus \u670D\u52A1\u6682\u4E0D\u652F\u6301\u8D26\u6237\u9A8C\u8BC1\u3002",
-  "error.server-incompatible": "\u8BF7\u8054\u7CFB Gemus \u670D\u52A1\u7BA1\u7406\u5458\u66F4\u65B0\u670D\u52A1\u540E\u91CD\u65B0\u68C0\u6D4B\u3002\u5DF2\u6CE8\u518C\u7684\u5DE5\u5177\u4ECD\u53EF\u80FD\u5728\u4F1A\u8BDD\u4E2D\u4F7F\u7528\u3002",
-  "error.invalid-endpoint": "\u8BF7\u4F7F\u7528 HTTPS\uFF0C\u6216\u672C\u673A HTTP\u3002\u5730\u5740\u4E0D\u80FD\u5305\u542B\u51ED\u636E\u3001\u67E5\u8BE2\u53C2\u6570\u6216\u7247\u6BB5\u3002",
+  "error.server-incompatible": "\u8BF7\u8054\u7CFB Gemus \u670D\u52A1\u7BA1\u7406\u5458\u66F4\u65B0\u670D\u52A1\u540E\u91CD\u65B0\u68C0\u6D4B\u3002\u8D26\u6237\u9A8C\u8BC1\u6210\u529F\u524D\u4E0D\u4F1A\u6302\u8F7D\u5DE5\u5177\u3002",
+  "error.invalid-endpoint": "\u8BF7\u4F7F\u7528 Gemus \u5B98\u65B9 HTTPS /api/mcp \u5730\u5740\uFF0C\u6216\u660E\u786E\u7684\u672C\u673A\u5F00\u53D1\u5730\u5740\u3002",
   "error.host-incompatible": "\u8BF7\u68C0\u67E5 DSH \u7248\u672C\uFF0C\u4EE5\u53CA\u662F\u5426\u6709\u5176\u4ED6 Gemus \u63D2\u4EF6\u5360\u7528\u4E86\u5DE5\u5177\u3002",
   "error.cancelled": "\u64CD\u4F5C\u5DF2\u88AB\u66F4\u65B0\u7684\u8BF7\u6C42\u53D6\u4EE3\uFF0C\u8BF7\u91CD\u65B0\u68C0\u6D4B\u3002",
   loading: "\u6B63\u5728\u8BFB\u53D6 Gemus \u8FDE\u63A5\u2026",
@@ -323,11 +337,13 @@ function ConnectionPanel({ api, t }) {
   const [view2, setView] = (0, import_react.useState)(null);
   const [key, setKey] = (0, import_react.useState)("");
   const [endpoint, setEndpoint] = (0, import_react.useState)(DEFAULT_ENDPOINT);
+  const [expectedUserId, setExpectedUserId] = (0, import_react.useState)("");
   const [busy, setBusy] = (0, import_react.useState)(false);
   const [failed, setFailed] = (0, import_react.useState)(false);
   const [copied, setCopied] = (0, import_react.useState)(false);
   const sequence = (0, import_react.useRef)(0);
   const connectPage = connectPageUrl(endpoint);
+  const site = endpoint === "https://gemus.cn/api/mcp" ? "cn" : endpoint === DEFAULT_ENDPOINT ? "global" : "local";
   const perform = async (operation) => {
     const id = ++sequence.current;
     setBusy(true);
@@ -337,6 +353,7 @@ function ConnectionPanel({ api, t }) {
       if (sequence.current === id) {
         setView(next);
         setEndpoint(next.endpoint);
+        setExpectedUserId(next.identity?.user.id ?? "");
       }
     } catch {
       if (sequence.current === id) setFailed(true);
@@ -353,7 +370,7 @@ function ConnectionPanel({ api, t }) {
   const submit = (event) => {
     event.preventDefault();
     if (!view2 || busy) return;
-    const input = { apiKey: key, endpoint, expectedRevision: view2.revision };
+    const input = { apiKey: key, endpoint, expectedRevision: view2.revision, ...expectedUserId.trim() ? { expectedUserId: expectedUserId.trim() } : {} };
     setKey("");
     void perform(() => api.connect(input));
   };
@@ -367,6 +384,13 @@ function ConnectionPanel({ api, t }) {
       /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { role: "status", children: t(busy ? "status.checking" : `status.${view2.status}`) }),
       view2.error && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { role: "alert", children: t(`error.${view2.error}`) }),
       view2.identity && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: stack, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+          t("connectedSite"),
+          ": ",
+          t(`site.${view2.identity.instance}`),
+          " \xB7 ",
+          view2.identity.endpoint
+        ] }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
           t("account"),
           ": ",
@@ -383,6 +407,16 @@ function ConnectionPanel({ api, t }) {
       view2.saved && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: hint, children: t("saved") }),
       view2.source === "environment" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: hint, children: t("environment") }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", { onSubmit: submit, style: stack, autoComplete: "off", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", { htmlFor: "gemus-site", children: t("site") }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", { id: "gemus-site", value: site, disabled: busy, onChange: (event) => {
+          setEndpoint(event.target.value === "cn" ? "https://gemus.cn/api/mcp" : event.target.value === "global" ? DEFAULT_ENDPOINT : "http://localhost:3000/api/mcp");
+          setKey("");
+          setExpectedUserId("");
+        }, style: { color: "var(--dsw-alias-text-primary)", background: "var(--dsw-alias-background-primary)" }, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "cn", children: t("site.cn") }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "global", children: t("site.global") }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "local", children: t("site.local") })
+        ] }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", { htmlFor: "gemus-key", children: t("key") }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Input, { id: "gemus-key", type: "password", value: key, autoComplete: "off", spellCheck: false, disabled: busy, onChange: (event) => setKey(event.target.value), "aria-describedby": "gemus-key-hint" }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { id: "gemus-key-hint", style: hint, children: [
@@ -390,6 +424,8 @@ function ConnectionPanel({ api, t }) {
           " ",
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { href: connectPage, target: "_blank", rel: "noreferrer", children: connectPage.replace(/^https?:\/\//, "") })
         ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", { htmlFor: "gemus-expected-user", children: t("expectedUser") }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Input, { id: "gemus-expected-user", value: expectedUserId, disabled: busy, autoComplete: "off", onChange: (event) => setExpectedUserId(event.target.value) }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("details", { children: [
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("summary", { children: t("advanced") }),
           /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: stack, children: [
@@ -397,6 +433,7 @@ function ConnectionPanel({ api, t }) {
             /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_dsh_client_ui_primitives.Input, { id: "gemus-endpoint", type: "url", value: endpoint, disabled: busy, onChange: (event) => {
               setEndpoint(event.target.value);
               setKey("");
+              setExpectedUserId("");
             } })
           ] })
         ] }),

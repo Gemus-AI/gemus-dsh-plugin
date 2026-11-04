@@ -11,12 +11,12 @@ The app includes its runtime; no system Node.js, global CLI, or terminal is requ
 
 1. In DSH, open **Plugins → Add plugin** and enter `github:Gemus-AI/gemus-dsh-plugin`.
 2. Install and enable Gemus, then open its page in the installed plugins list.
-3. Create a Key at [Gemus Connect](https://gemus.ai/connect). Paste it into **Gemus Key**, select **Connect Gemus**, and confirm the displayed account and personal space.
+3. Choose **Domestic** (`gemus.cn`) or **International** (`gemus.ai`) in the plugin. Create a Key on that site, paste it into **Gemus Key**, and connect. Confirm the displayed actual site, account and personal space. An optional expected account ID is checked for equality; it never grants access.
 4. In a normal DSH chat, ask: “Use Gemus workflow_list to list workflows in my personal space. Do not create workflows or generate content.”
 
 A successful check confirms identity and observed tool registration at the shown time, not continuous online status. A normal chat call verifies actual use. Connection checks spend no Gemus generation credits; DSH chat may consume model credits. Model credentials and working-directory selection belong to DSH and remain separate.
 
-The connection is saved by DSH's credentials service and restored after reopening. This local storage is not an encrypted keychain and does not protect secrets from other processes running as the same OS user.
+Version 0.2.5 verifies the destination and authenticated site/account before saving or mounting tools, including after reopening. New Keys use `mak_cn_…` or `mak_global_…`; strict legacy Keys belong only to International. The connection is saved by DSH's credentials service and restored only after successful identity verification. Failed checks preserve the credential for retry and do not mount tools. Older International servers are compatible only with strict legacy-global Keys; Domestic and tagged Keys require the new identity response. This local storage is not an encrypted keychain and does not protect secrets from other processes running as the same OS user.
 
 ## Recovery and upgrade
 
@@ -28,7 +28,7 @@ Windows and macOS require separate end-to-end verification. Other DSH releases a
 
 ## Advanced CLI setup
 
-The existing installer requires Node.js and a `dsh` command on PATH:
+The existing published installer below is an International legacy path and has no installation identity preflight. Domestic users should use Desktop or the explicit manual environment below. It requires Node.js and a `dsh` command on PATH:
 
 ```sh
 npx -y @gemus/mcp-proxy@0.1.16 setup-dsh
@@ -38,13 +38,16 @@ It configures the **web** CLI profile, not Desktop. Alternatively:
 
 ```sh
 dsh plugin --profile web add github:Gemus-AI/gemus-dsh-plugin
-export GEMUS_KEY="mak_…"
+export GEMUS_KEY="mak_cn_…"
+export GEMUS_URL="https://gemus.cn/api/mcp"
 dsh --profile web
 ```
 
-In PowerShell use `$env:GEMUS_KEY = "mak_…"` before launching `dsh --profile web` in that same terminal. Child processes inherit the current shell environment. Updating the Windows user environment or a shell startup file requires a new terminal.
+For International use its own Key and `https://gemus.ai/api/mcp`. In PowerShell set both `$env:GEMUS_KEY = "mak_cn_…"` and `$env:GEMUS_URL = "https://gemus.cn/api/mcp"` before launching `dsh --profile web` in that same terminal. Child processes inherit the current shell environment. Updating the Windows user environment or a shell startup file requires a new terminal.
 
-Legacy `GEMUS_KEY` / `GEMUS_URL` are read together only when no desktop credential record exists. `GEMUS_URL` is the full MCP URL; the default is `https://gemus.ai/api/mcp`. Advanced self-hosted endpoints allow HTTPS, or HTTP on loopback only, without URL credentials/query/fragment.
+Legacy `GEMUS_KEY` / `GEMUS_URL` are read together only when no desktop credential record exists. `GEMUS_URL` is the full MCP URL; the default is `https://gemus.ai/api/mcp`. Supported destinations are official Gemus HTTPS port 443 `/api/mcp` endpoints and explicit localhost / 127.0.0.1 / [::1] development `/api/mcp` endpoints. Unknown hosts, other paths/official ports, URL credentials, query and fragment are rejected before sending a Key. Redirects are refused. Local development is global-only.
+
+The next CLI source release adds installation preflight and optional `--expected-user <account ID>`. Its launched session carries a one-use setup intent and the verified account ID; the Host verifies again and updates the existing DSH credential through the connection owner. This makes an explicit setup replace a previously saved connection without changing ordinary environment precedence or the disconnect tombstone. Setup-intent fields are removed from the Host environment and are never persisted in shell profiles or user environment. It must be published from merged master and verified before updating live installer pins; this PR does not publish or point users to an unavailable package.
 
 Use `dsh --profile web --dump-config` to inspect the Gemus layer. For reproducibility, pin `github:Gemus-AI/gemus-dsh-plugin#<published-sha>`.
 

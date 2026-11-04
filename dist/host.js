@@ -187,24 +187,58 @@ import { credentialKey } from "@deepseek-ai/dsh-credentials";
 // src/contracts.ts
 var DEFAULT_ENDPOINT = "https://gemus.ai/api/mcp";
 
-// src/identity.ts
-import { isIP } from "node:net";
-function validateEndpoint(input) {
+// ../codex-backfill-core/src/mcpIdentity.ts
+function getMcpKeyIssuer(token) {
+  const tagged = /^mak_(cn|global)_[0-9a-f]{48}$/.exec(token);
+  if (tagged?.[0] === token) return tagged[1];
+  return token.length === 52 && /^mak_[0-9a-f]{48}$/.test(token) ? "global" : null;
+}
+function resolveMcpEndpoint(endpoint) {
+  const syntax = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|(?:www\.)?gemus\.(?:ai|cn))(?::[0-9]+)?\/api\/mcp$/i.exec(endpoint);
+  if (!syntax || syntax[0] !== endpoint) return null;
   try {
-    const url = new URL(input.trim());
-    const loopback = url.hostname === "localhost" || url.hostname === "[::1]" || isIP(url.hostname) === 4 && url.hostname.split(".")[0] === "127";
-    if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback) || url.username || url.password || url.search || url.hash) throw new Error();
-    return url.href.replace(/\/$/, "");
+    const url = new URL(endpoint);
+    if (url.username || url.password || url.search || url.hash || url.pathname !== "/api/mcp") return null;
+    const host = url.hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") {
+      return { endpoint: url.href, issuer: "global" };
+    }
+    if (url.protocol !== "https:" || url.port) return null;
+    if (host === "gemus.cn" || host === "www.gemus.cn") return { endpoint: url.href, issuer: "cn" };
+    if (host === "gemus.ai" || host === "www.gemus.ai") return { endpoint: url.href, issuer: "global" };
+    return null;
   } catch {
-    throw new Error("invalid-endpoint");
+    return null;
   }
+}
+
+// src/identity.ts
+function validateEndpoint(input) {
+  const target = resolveMcpEndpoint(input.trim());
+  if (!target) throw new Error("invalid-endpoint");
+  return target.endpoint;
+}
+function validateConnectionTarget(config) {
+  const target = resolveMcpEndpoint(config.endpoint.trim());
+  if (!target) throw new Error("invalid-endpoint");
+  const issuer = getMcpKeyIssuer(config.apiKey ?? "");
+  if (!issuer) throw new Error("auth-required");
+  if (issuer !== target.issuer) throw new Error("identity-mismatch");
+  return target;
 }
 function isObject(value) {
   return typeof value === "object" && value !== null;
 }
+function validateIdentity(config, identity2) {
+  const target = validateConnectionTarget(config);
+  const actual = resolveMcpEndpoint(identity2.endpoint);
+  const official = (endpoint) => ["gemus.ai", "www.gemus.ai", "gemus.cn", "www.gemus.cn"].includes(new URL(endpoint).hostname);
+  if (identity2.instance !== target.issuer || !actual || actual.issuer !== target.issuer || actual.endpoint !== target.endpoint && !(official(actual.endpoint) && official(target.endpoint)) || config.expectedUserId && config.expectedUserId !== identity2.user.id) throw new Error("identity-mismatch");
+}
 async function identify(config, signal) {
+  const target = validateConnectionTarget(config);
   try {
-    const response = await fetch(`${validateEndpoint(config.endpoint)}/connection`, {
+    const response = await fetch(`${target.endpoint}/connection`, {
       headers: { Authorization: `Bearer ${config.apiKey}` },
       redirect: "error",
       cache: "no-store",
@@ -214,13 +248,18 @@ async function identify(config, signal) {
     if (response.status === 404 || response.status === 405) throw new Error("server-incompatible");
     if (!response.ok) throw new Error("network-error");
     const body = await response.json();
-    if (!isObject(body) || !isObject(body.user) || typeof body.user.id !== "string" || typeof body.user.displayName !== "string" || body.user.username !== null && typeof body.user.username !== "string" || body.personalWorkspace !== null && (!isObject(body.personalWorkspace) || typeof body.personalWorkspace.id !== "string" || typeof body.personalWorkspace.name !== "string")) throw new Error("network-error");
-    return {
+    if (!isObject(body) || !isObject(body.user) || typeof body.user.id !== "string" || !body.user.id || typeof body.user.displayName !== "string" || body.user.username !== null && typeof body.user.username !== "string" || body.personalWorkspace !== null && (!isObject(body.personalWorkspace) || typeof body.personalWorkspace.id !== "string" || typeof body.personalWorkspace.name !== "string")) throw new Error("server-incompatible");
+    const legacy = /^mak_[0-9a-f]{48}$/.test(config.apiKey ?? "") && ["gemus.ai", "www.gemus.ai"].includes(new URL(target.endpoint).hostname) && body.instance === void 0 && body.endpoint === void 0;
+    const identity2 = {
+      instance: legacy ? "global" : body.instance,
+      endpoint: legacy ? target.endpoint : typeof body.endpoint === "string" ? body.endpoint : "",
       user: { id: body.user.id, username: body.user.username, displayName: body.user.displayName },
       personalWorkspace: body.personalWorkspace === null ? null : { id: body.personalWorkspace.id, name: body.personalWorkspace.name }
     };
+    validateIdentity(config, identity2);
+    return identity2;
   } catch (error) {
-    throw new Error(error instanceof Error && ["auth-required", "server-incompatible"].includes(error.message) ? error.message : "network-error");
+    throw new Error(error instanceof Error && ["auth-required", "server-incompatible", "identity-mismatch"].includes(error.message) ? error.message : "network-error");
   }
 }
 
@@ -237,6 +276,7 @@ function decode(record, environment) {
   if (record.kind !== "api-key") throw new Error("storage-error");
   return {
     revision: record.env?.GEMUS_CONNECTION_REVISION ?? "none",
+    expectedUserId: record.env?.GEMUS_EXPECTED_USER_ID,
     enabled: record.env?.GEMUS_CONNECTION_ENABLED === "true",
     apiKey: record.key,
     endpoint: record.env?.GEMUS_ENDPOINT || DEFAULT_ENDPOINT,
@@ -256,6 +296,7 @@ function createCredentials(store, environment = process.env) {
       const result = await store.modifyRecord(CONNECTION_KEY, async (current) => {
         if (decode(current, environment).revision !== expectedRevision) throw new Error("conflict");
         return { kind: "api-key", ...next.enabled ? { key: next.apiKey } : {}, env: {
+          ...next.expectedUserId ? { GEMUS_EXPECTED_USER_ID: next.expectedUserId } : {},
           GEMUS_ENDPOINT: validateEndpoint(next.endpoint),
           GEMUS_CONNECTION_REVISION: randomUUID2(),
           GEMUS_CONNECTION_ENABLED: String(next.enabled)
@@ -298,8 +339,19 @@ var ConnectionOwner = class {
   get recoveryToken() {
     return !this.disposed && this.child && this.view.status === "verified" && this.view.operationId === this.generation ? this.generation : void 0;
   }
-  start() {
-    return this.run(async (check) => this.restore(check));
+  start(intent) {
+    return this.run(async (check) => {
+      if (!intent) return this.restore(check);
+      await this.clearChild();
+      check();
+      const current = await this.deps.read();
+      check();
+      this.acceptRecord(current);
+      this.view.identity = null;
+      this.view.identityCheckedAt = null;
+      if (intent.version !== "connect-v1" || !intent.apiKey || !intent.endpoint || !intent.expectedUserId || intent.expectedUserId !== intent.expectedUserId.trim() || intent.expectedUserId.length > 128 || /[\x00-\x1f\x7f]/.test(intent.expectedUserId)) throw new Error("identity-mismatch");
+      await this.connectRecord(current, { apiKey: intent.apiKey, endpoint: intent.endpoint, expectedUserId: intent.expectedUserId, expectedRevision: current.revision }, check);
+    });
   }
   /** Observe after the active operation, so own notifications are cheap and foreign updates cannot be lost. */
   recordUpdated() {
@@ -324,23 +376,29 @@ var ConnectionOwner = class {
     return this.run(async (check) => {
       const current = await this.deps.read();
       check();
-      this.expectRevision(current, input.expectedRevision);
-      const endpoint = validateEndpoint(input.endpoint);
-      if (!/^mak_[A-Za-z0-9_-]+$/.test(input.apiKey.trim())) throw new Error("auth-required");
-      const candidate2 = { ...current, endpoint, apiKey: input.apiKey.trim(), enabled: true };
-      const identity2 = await this.deps.identify(candidate2, this.abort.signal);
-      check();
-      const identityCheckedAt = (/* @__PURE__ */ new Date()).toISOString();
-      const saved = await this.write(candidate2, input.expectedRevision);
-      check();
-      await this.clearChild();
-      check();
-      this.acceptRecord(saved);
-      this.view.identity = identity2;
-      this.view.identityCheckedAt = identityCheckedAt;
-      if (!await this.replace(saved, check)) return;
-      this.finishCheck();
+      await this.connectRecord(current, input, check);
     });
+  }
+  async connectRecord(current, input, check) {
+    this.expectRevision(current, input.expectedRevision);
+    const endpoint = validateEndpoint(input.endpoint);
+    const candidate2 = { ...current, endpoint, apiKey: input.apiKey.trim(), enabled: true, expectedUserId: input.expectedUserId?.trim() || void 0 };
+    validateConnectionTarget(candidate2);
+    const identity2 = await this.deps.identify(candidate2, this.abort.signal);
+    check();
+    validateIdentity(candidate2, identity2);
+    candidate2.expectedUserId = identity2.user.id;
+    candidate2.endpoint = identity2.endpoint;
+    const identityCheckedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const saved = await this.write(candidate2, input.expectedRevision);
+    check();
+    await this.clearChild();
+    check();
+    this.acceptRecord(saved);
+    this.view.identity = identity2;
+    this.view.identityCheckedAt = identityCheckedAt;
+    if (!await this.replace(saved, check)) return;
+    this.finishCheck();
   }
   recheck(_expectedRevision) {
     return this.run(async (check) => this.restore(check));
@@ -382,28 +440,14 @@ var ConnectionOwner = class {
       this.view.status = "disconnected";
       return;
     }
-    validateEndpoint(current.endpoint);
-    let identityError = null;
-    try {
-      const identity2 = await this.deps.identify(current, this.abort.signal);
-      check();
-      this.view.identity = identity2;
-      this.view.identityCheckedAt = (/* @__PURE__ */ new Date()).toISOString();
-    } catch (error) {
-      check();
-      if (error instanceof Error && error.message === "auth-required") {
-        await this.clearChild();
-        check();
-        throw error;
-      }
-      identityError = error instanceof Error && error.message === "server-incompatible" ? "server-incompatible" : "network-error";
-    }
+    validateConnectionTarget(current);
+    const identity2 = await this.deps.identify(current, this.abort.signal);
+    check();
+    validateIdentity(current, identity2);
+    this.view.identity = identity2;
+    this.view.identityCheckedAt = (/* @__PURE__ */ new Date()).toISOString();
     if (!await this.replace(current, check)) return;
     this.finishCheck();
-    if (identityError) {
-      this.view.status = identityError;
-      this.view.error = identityError;
-    }
   }
   async replace(config, check) {
     await this.clearChild();
@@ -475,7 +519,7 @@ var ConnectionOwner = class {
         await operation(check);
       } catch (error) {
         if (this.disposed || generation !== this.generation) return this.getStatus();
-        const safe = error instanceof Error && ["auth-required", "network-error", "server-incompatible", "storage-error", "conflict", "invalid-endpoint", "host-incompatible", "cancelled"].includes(error.message) ? error.message : "host-incompatible";
+        const safe = error instanceof Error && ["auth-required", "network-error", "server-incompatible", "storage-error", "conflict", "invalid-endpoint", "host-incompatible", "cancelled", "identity-mismatch"].includes(error.message) ? error.message : "host-incompatible";
         this.view.error = safe;
         this.view.status = this.child && this.view.identity ? previousStatus : safe === "auth-required" || safe === "network-error" || safe === "server-incompatible" || safe === "storage-error" ? safe : "needs-check";
       }
@@ -507,7 +551,7 @@ function mountOfficialClient(ctx, config) {
 // src/remote.ts
 import { z as z2 } from "zod";
 import { createTypertRemoteInfo } from "@deepseek-ai/dsh-typert-protocol/remote-info";
-var identity = z2.object({ user: z2.object({ id: z2.string(), username: z2.string().nullable(), displayName: z2.string() }), personalWorkspace: z2.object({ id: z2.string(), name: z2.string() }).nullable() });
+var identity = z2.object({ instance: z2.enum(["cn", "global"]), endpoint: z2.string(), user: z2.object({ id: z2.string(), username: z2.string().nullable(), displayName: z2.string() }), personalWorkspace: z2.object({ id: z2.string(), name: z2.string() }).nullable() });
 var view = z2.object({
   status: z2.enum(["disconnected", "checking", "verified", "needs-check", "auth-required", "network-error", "server-incompatible", "host-incompatible", "storage-error"]),
   revision: z2.string(),
@@ -520,7 +564,7 @@ var view = z2.object({
   checkedAt: z2.string().nullable(),
   identityCheckedAt: z2.string().nullable(),
   toolsCheckedAt: z2.string().nullable(),
-  error: z2.enum(["auth-required", "network-error", "server-incompatible", "storage-error", "conflict", "invalid-endpoint", "host-incompatible", "cancelled"]).nullable()
+  error: z2.enum(["auth-required", "network-error", "server-incompatible", "storage-error", "conflict", "invalid-endpoint", "host-incompatible", "cancelled", "identity-mismatch"]).nullable()
 });
 function codec(schema, name) {
   return { mode: "strict", typeSymbol: `gemus/${name}`, create: () => schema };
@@ -535,7 +579,7 @@ function method(name, schema) {
 }
 var GEMUS_REMOTE = createTypertRemoteInfo({ package: "gemus-dsh-plugin", methods: {
   "gemusConnection/getStatus": method(),
-  "gemusConnection/connect": method("input", z2.strictObject({ apiKey: z2.string().max(512), endpoint: z2.string().max(2048), expectedRevision: z2.string().max(128) })),
+  "gemusConnection/connect": method("input", z2.strictObject({ apiKey: z2.string().max(512), endpoint: z2.string().max(2048), expectedRevision: z2.string().max(128), expectedUserId: z2.string().max(128).optional() })),
   "gemusConnection/recheck": method("expectedRevision", z2.string().max(128)),
   "gemusConnection/disconnect": method("expectedRevision", z2.string().max(128))
 } }, z2);
@@ -555,7 +599,11 @@ var GemusConnection = class extends (_a = TypertRemoteService, _getStatus_dec = 
     ctx.on("credentials/record-updated", (key) => {
       if (key === CONNECTION_KEY) this.owner.recordUpdated();
     });
-    this.initialized = this.owner.start();
+    const environment = process.env;
+    const intent = environment.GEMUS_SETUP_INTENT !== void 0 || environment.GEMUS_SETUP_EXPECTED_USER_ID !== void 0 ? { version: environment.GEMUS_SETUP_INTENT, apiKey: environment.GEMUS_KEY, endpoint: environment.GEMUS_URL, expectedUserId: environment.GEMUS_SETUP_EXPECTED_USER_ID } : void 0;
+    delete environment.GEMUS_SETUP_INTENT;
+    delete environment.GEMUS_SETUP_EXPECTED_USER_ID;
+    this.initialized = this.owner.start(intent);
     ctx.effect(() => () => this.owner.dispose());
   }
   assertOwner() {
