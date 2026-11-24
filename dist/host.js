@@ -138,8 +138,8 @@ var recoveryProjection = {
     return state;
   }
 };
-function installGemusRecovery(ctx, connectionToken) {
-  ctx.sessionProjections.register(recoveryProjection);
+async function installGemusRecovery(ctx, connectionToken) {
+  const recovery = await ctx.sessionProjections.register(recoveryProjection);
   let active = true;
   ctx.effect(() => () => {
     active = false;
@@ -149,14 +149,14 @@ function installGemusRecovery(ctx, connectionToken) {
     if (!active || signal.aborted) return;
     if (failure.code !== "MALFORMED_RESPONSE" || retryPolicy?.mode === "always" || retryPolicy?.mode === "normal" && (retryPolicy.maxRetries === 0 || retryPolicy.retryableCodes.includes(failure.code))) return next();
     const token = connectionToken();
-    const before = ctx.sessionProjections.stateOf(agent.session, recoveryProjection.key);
-    if (token === void 0 || !before?.eligible || before.turn !== turn || before.step !== step || before.provider !== provider2 || before.requestSeq === null || before.requestSeq !== before.attemptRequestSeq || before.handledSeq === before.attemptSeq || before.retries >= MAX_RETRIES || !before.names.every((name) => ctx.tools.get(name))) return next();
+    const before = recovery.stateOf(agent.session);
+    if (token === void 0 || !before.eligible || before.turn !== turn || before.step !== step || before.provider !== provider2 || before.requestSeq === null || before.requestSeq !== before.attemptRequestSeq || before.handledSeq === before.attemptSeq || before.retries >= MAX_RETRIES || !before.names.every((name) => ctx.tools.get(name))) return next();
     const downstream = await next();
     if (signal.aborted) return;
     if (downstream?.kind === "retry") return downstream;
     if (!active || connectionToken() !== token) return downstream;
-    const current = ctx.sessionProjections.stateOf(agent.session, recoveryProjection.key);
-    if (!current || current.attemptSeq !== before.attemptSeq || current.requestSeq !== before.requestSeq || current.handledSeq === current.attemptSeq || current.retries >= MAX_RETRIES) return downstream;
+    const current = recovery.stateOf(agent.session);
+    if (current.attemptSeq !== before.attemptSeq || current.requestSeq !== before.requestSeq || current.handledSeq === current.attemptSeq || current.retries >= MAX_RETRIES) return downstream;
     const retryId = current.retryId ?? randomUUID();
     const retry = current.retries + 1;
     agent.session.append("llm/retry", {

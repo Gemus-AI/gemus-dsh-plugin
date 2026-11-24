@@ -5,7 +5,7 @@ This bundle includes a Host connection owner and an in-app configuration page. I
 
 ## Desktop setup (recommended)
 
-Requires the official DSH Desktop **0.2.1-rc.5** and a Gemus account.
+Requires the official DSH Desktop **0.2.2-rc.1 or later** in the 0.2 line and a Gemus account and Key; generations spend Gemus credits.
 [Download the official app](https://github.com/deepseek-ai/deepseek-harness/releases).
 The app includes its runtime; no system Node.js, global CLI, or terminal is required.
 
@@ -24,7 +24,7 @@ Use **Check again** after a network failure or exhausted automatic retries. It r
 
 From 0.1.3, use the native Plugins page to uninstall and reinstall, then enter your Key again. Keep your models, chats, and other plugins. Unknown user YAML overrides are not automatically removed; a conflicting Gemus MCP row must be resolved through the host's existing management UI. No build scripts or allowBuilds grant are needed.
 
-Windows and macOS require separate end-to-end verification. Other DSH releases are outside this version's declared compatibility.
+Windows and macOS require separate end-to-end verification. Version 0.2.11 declares DSH `>=0.2.2-rc.1 <0.3.0-0`; it was checked on 0.2.2-rc.1, 0.2.2-rc.5 and 0.2.3-alpha.2. DSH 0.2.1-rc.5 refuses it: update DSH, or install the last build for that host with `github:Gemus-AI/gemus-dsh-plugin#847e0b612437ae9a025781696b405ea831abc924` (0.2.10, no further fixes).
 
 ## Advanced CLI setup
 

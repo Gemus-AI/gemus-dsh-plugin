@@ -32,7 +32,7 @@ var import_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primit
 // src/remote.ts
 var import_zod = require("zod");
 
-// ../../node_modules/.pnpm/@deepseek-ai+dsh-typert-protocol@_vgkmyg3mxylp7xxhyjl7pxe7yu/node_modules/@deepseek-ai/dsh-typert-protocol/lib/types/remote-info.js
+// ../../node_modules/.pnpm/@deepseek-ai+dsh-typert-protocol@_7zfn36al5jimdl7e74ixplvi5i/node_modules/@deepseek-ai/dsh-typert-protocol/lib/types/remote-info.js
 function createTypertRemoteInfo(spec, zod) {
   return new RemoteInfo(spec, zod);
 }
